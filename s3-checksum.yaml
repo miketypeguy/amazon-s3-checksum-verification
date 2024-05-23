@@ -45,59 +45,60 @@ Resources:
               }
 
               attributes = get_attributes(bucket, key)
-              
-              # Only proceed if Checksums don't already exist
-              if attributes['Checksum'] == None:
-                  print(f"Copying {key} to the same place but adding Checksum ...")
-                  
-                  try:
-                      # If using SSE-KMS
-                      if 'EncryptionKey' in attributes:
-                          s3_resource.meta.client.copy(
-                              copy_source,
-                              Bucket=bucket,
-                              Key=key,
-                              ExtraArgs={
-                                  'ChecksumAlgorithm':os.environ['Checksum'],
-                                  'StorageClass': attributes['StorageClass'],
-                                  'ServerSideEncryption': attributes['Encryption'],
-                                  'SSEKMSKeyId': attributes['EncryptionKey']
-                              }
-                          )
-                      # If using SSE-S3
-                      elif attributes['Encryption'] != None:
-                          s3_resource.meta.client.copy(
-                              copy_source,
-                              Bucket=bucket,
-                              Key=key,
-                              ExtraArgs={
-                                  'ChecksumAlgorithm':os.environ['Checksum'],
-                                  'StorageClass': attributes['StorageClass'],
-                                  'ServerSideEncryption': attributes['Encryption']
-                              }
-                          )
-                      # If not using any encryption - NOT RECOMMENDED
-                      else:
-                          print(os.environ['Checksum'])
-                          s3_resource.meta.client.copy(
-                              copy_source,
-                              Bucket=bucket,
-                              Key=key,
-                              ExtraArgs={
-                                  'ChecksumAlgorithm':os.environ['Checksum'],
-                                  'StorageClass': attributes['StorageClass']
-                              }
-                          )
-                      print(f"SUCCESS: {key} now has a {os.environ['Checksum']} Checksum ")
+              print(f"attributes {attributes}")
+              if attributes is not None: 
+                  # Only proceed if Checksums don't already exist
+                  if "Checksum" not in attributes:
+                      print(f"Copying {key} to the same place but adding Checksum ...")
+                      try:
+                          # If using SSE-KMS
+                          if 'EncryptionKey' in attributes:
+                              s3_resource.meta.client.copy(
+                                  copy_source,
+                                  Bucket=bucket,
+                                  Key=key,
+                                  ExtraArgs={
+                                      'ChecksumAlgorithm':os.environ['Checksum'],
+                                      'StorageClass': attributes['StorageClass'],
+                                      'ServerSideEncryption': attributes['Encryption'],
+                                      'SSEKMSKeyId': attributes['EncryptionKey']
+                                  }
+                              )
+                          # If using SSE-S3
+                          elif attributes['Encryption']:
+                              s3_resource.meta.client.copy(
+                                  copy_source,
+                                  Bucket=bucket,
+                                  Key=key,
+                                  ExtraArgs={
+                                      'ChecksumAlgorithm':os.environ['Checksum'],
+                                      'StorageClass': attributes['StorageClass'],
+                                      'ServerSideEncryption': attributes['Encryption']
+                                  }
+                              )
+                          # If not using any encryption - NOT RECOMMENDED
+                          else:
+                              print(os.environ['Checksum'])
+                              s3_resource.meta.client.copy(
+                                  copy_source,
+                                  Bucket=bucket,
+                                  Key=key,
+                                  ExtraArgs={
+                                      'ChecksumAlgorithm':os.environ['Checksum'],
+                                      'StorageClass': attributes['StorageClass']
+                                  }
+                              )
+                          print(f"SUCCESS: {key} now has a {os.environ['Checksum']} Checksum ")
+                          
+                      except Exception as e:
+                          print(e)
+                          raise
                       
-                    except Exception as e:
-                      print(e)
-                      raise
-                  
-                else:
-                    print(f"{key} already has a Checksum; No further action needed!")
-
-                return
+                  else:
+                      print(f"{key} already has a Checksum; No further action needed!")
+              else:
+                  print(f"Could not read attributes for {key}")
+              return
 
 
           def object_has_checksum(get_object_attributes_response: Any) -> Tuple[Any, bool, str]:
@@ -154,35 +155,39 @@ Resources:
                       elif 'ChecksumSHA256' in checksum_pair:
                           print(f"{key} already has a SHA256 Checksum!")
                           return attributes
-                          
                       else:
-                          print(f"{key} does not have a Checksum!")
-                          print(f"Obtaining other attributes for {key} ...")
-                          
-                          #Check Object's storage class
-                          print(f"Checking Storage Class for {key} ...")
-                          
-                          if 'StorageClass' not in response:
-                              print(f"{key} is stored in S3-STANDARD.")
-                              attributes['StorageClass'] = 'STANDARD'
-                          else:
-                              storage_class = response['StorageClass']
-                              print(f"{key} is stored in {storage_class}.")
-                              attributes['StorageClass'] = response['StorageClass']
-                          
-                          # Check Object's encryption
-                          print(f"Checking Encryption for {key} ...")
-                          
-                          if 'ServerSideEncryption' not in response:
-                              print(f"{key} is not encrypted.")
-                              attributes['Encryption'] = None
-                          else:
-                              print(f"{key} is encrypted.")
-                              attributes['Encryption'] = response['ServerSideEncryption']
-                              if response['ServerSideEncryption'] == 'aws:kms':
-                                  attributes['EncryptionKey'] = response['SSEKMSKeyId']
-                          
+                          #should not get here
+                          print(f"{key} already has an unrecognized Checksum!")
                           return attributes
+                          
+                  else:
+                      print(f"{key} does not have a Checksum!")
+                      print(f"Obtaining other attributes for {key} ...")
+                      
+                      #Check Object's storage class
+                      print(f"Checking Storage Class for {key} ...")
+                      
+                      if 'StorageClass' not in response:
+                          print(f"{key} is stored in S3-STANDARD.")
+                          attributes['StorageClass'] = 'STANDARD'
+                      else:
+                          storage_class = response['StorageClass']
+                          print(f"{key} is stored in {storage_class}.")
+                          attributes['StorageClass'] = response['StorageClass']
+                      
+                      # Check Object's encryption
+                      print(f"Checking Encryption for {key} ...")
+                      
+                      if 'ServerSideEncryption' not in response:
+                          print(f"{key} is not encrypted.")
+                          attributes['Encryption'] = None
+                      else:
+                          print(f"{key} is encrypted.")
+                          attributes['Encryption'] = response['ServerSideEncryption']
+                          if response['ServerSideEncryption'] == 'aws:kms':
+                              attributes['EncryptionKey'] = response['SSEKMSKeyId']
+                          
+                  return attributes
 
               except Exception as e:
                   print(e)
